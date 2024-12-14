@@ -1,11 +1,293 @@
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" contents="width=device-width, intitial-scal=1.0">
-  <title>Document</title>
-</head>
-<body>
-  <h1> BAI </h1>
-  <p> insert </p>
-</body>
-</html>
+<html><head><base href="." /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Genomics AI Assistant</title>
+    <style>
+    :root {
+      --primary: #2a9d8f;
+      --secondary: #264653;
+      --accent: #e9c46a;
+      --background: #f8f9fa;
+      --text: #333;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: var(--background);
+      color: var(--text);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    
+    .upload-zone {
+      border: 2px dashed var(--primary);
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      background: white;
+      transition: all 0.3s ease;
+    }
+    
+    .upload-zone.dragover {
+      background: rgba(42, 157, 143, 0.1);
+      transform: scale(1.02);
+    }
+    
+    .database-selector {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .database-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .database-option {
+      padding: 15px;
+      border: 2px solid var(--secondary);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .database-option:hover {
+      background: var(--secondary);
+      color: white;
+    }
+    
+    .database-option.selected {
+      background: var(--secondary);
+      color: white;
+    }
+    
+    .chat-container {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      height: 500px;
+    }
+    
+    .chat-messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .message {
+      margin-bottom: 15px;
+      padding: 10px 15px;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+    
+    .message.user {
+      background: var(--primary);
+      color: white;
+      margin-left: auto;
+    }
+    
+    .message.ai {
+      background: var(--background);
+      margin-right: auto;
+    }
+    
+    .chat-input {
+      display: flex;
+      padding: 15px;
+      border-top: 1px solid #eee;
+    }
+    
+    .chat-input input {
+      flex-grow: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-right: 10px;
+    }
+    
+    .chat-input button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    
+    .chat-input button:hover {
+      background: #238477;
+    }
+    
+    .file-info {
+      margin-top: 10px;
+      color: var(--secondary);
+    }
+    
+    </style>
+    </head>
+    <body>
+    <div class="container">
+      <div class="upload-zone" id="uploadZone">
+        <h2>Upload Genetics Dataset</h2>
+        <p>Drag and drop your file here or click to select</p>
+        <input type="file" id="fileInput" style="display: none" accept=".csv,.tsv,.txt">
+        <div class="file-info" id="fileInfo"></div>
+      </div>
+    
+      <div class="database-selector">
+        <h2>Select RAG Database</h2>
+        <div class="database-options">
+          <div class="database-option" data-db="genbank">GenBank Reference</div>
+          <div class="database-option" data-db="pubmed">PubMed Literature</div>
+          <div class="database-option" data-db="clinvar">ClinVar Variants</div>
+        </div>
+      </div>
+    
+      <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+          <div class="message ai">
+            Hello! I'm your genomics assistant. Once you upload your dataset and select a reference database, I can help analyze and interpret your genetic data.
+          </div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="messageInput" placeholder="Type your message here...">
+          <button id="sendButton">Send</button>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const uploadZone = document.getElementById('uploadZone');
+      const fileInput = document.getElementById('fileInput');
+      const fileInfo = document.getElementById('fileInfo');
+      const databaseOptions = document.querySelectorAll('.database-option');
+      const chatMessages = document.getElementById('chatMessages');
+      const messageInput = document.getElementById('messageInput');
+      const sendButton = document.getElementById('sendButton');
+    
+      let selectedDatabase = null;
+      let uploadedFile = null;
+    
+      // File Upload Handling
+      uploadZone.addEventListener('click', () => fileInput.click());
+    
+      uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+      });
+    
+      uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+      });
+    
+      uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        handleFile(files[0]);
+      });
+    
+      fileInput.addEventListener('change', (e) => {
+        handleFile(e.target.files[0]);
+      });
+    
+      function handleFile(file) {
+        if (file) {
+          uploadedFile = file;
+          fileInfo.textContent = `Selected file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+          addMessage('ai', `I see you've uploaded ${file.name}. How can I help you analyze this dataset?`);
+        }
+      }
+    
+      // Database Selection
+      databaseOptions.forEach(option => {
+        option.addEventListener('click', () => {
+          databaseOptions.forEach(opt => opt.classList.remove('selected'));
+          option.classList.add('selected');
+          selectedDatabase = option.dataset.db;
+          addMessage('ai', `I'll use the ${option.textContent} database for additional context. What would you like to know?`);
+        });
+      });
+    
+      // Chat Functionality
+      sendButton.addEventListener('click', sendMessage);
+      messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+      });
+    
+      function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
+    
+        addMessage('user', message);
+        messageInput.value = '';
+    
+        // Simulate AI response using the language model
+        processAIResponse(message);
+      }
+    
+      async function processAIResponse(userMessage) {
+        try {
+          const response = await fetch('/api/ai_completion', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              prompt: `You are a genomics AI assistant. Respond to the following user query about genetic data analysis.
+              Consider the context:
+              - Selected database: ${selectedDatabase}
+              - Uploaded file: ${uploadedFile ? uploadedFile.name : 'None'}
+              
+              User message: ${userMessage}
+              
+              <typescript-interface>
+              interface Response {
+                reply: string;
+                confidence: number;
+              }
+              </typescript-interface>
+              
+              <example>
+              {
+                "reply": "I've analyzed your genetic data against the GenBank database. The mutations you've highlighted show significant correlation with known patterns...",
+                "confidence": 0.89
+              }
+              </example>`,
+              data: userMessage
+            }),
+          });
+          
+          const data = await response.json();
+          addMessage('ai', data.reply);
+        } catch (error) {
+          console.error('Error:', error);
+          addMessage('ai', 'I apologize, but I encountered an error processing your request. Please try again.');
+        }
+      }
+    
+      function addMessage(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', type);
+        messageDiv.textContent = content;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    });
+    </script>
+    </body></html>
